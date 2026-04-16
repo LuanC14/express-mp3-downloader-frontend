@@ -5,19 +5,20 @@ on:
     branches: [master]
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout do repositório
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Instalar Node.js 18
-        uses: actions/setup-node@v3
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
+          cache: npm
 
-      - name: Criar .env.production
+      - name: Criar arquivo .env.production
         run: |
           echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env.production
           echo "VITE_BASE_PATH=/express-mp3-downloader-frontend/" >> .env.production
@@ -28,8 +29,8 @@ jobs:
       - name: Build da aplicação
         run: npm run build
 
-      - name: Deploy para GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Deploy para o GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
