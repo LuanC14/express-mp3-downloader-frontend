@@ -1,0 +1,43 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Criar arquivo .env.production
+        run: |
+          echo "VITE_EXPENSES_STORAGE_KEY=${{ secrets.VITE_EXPENSES_STORAGE_KEY }}" > .env.production
+          echo "VITE_BALANCE_STORAGE_KEY=${{ secrets.VITE_BALANCE_STORAGE_KEY }}" >> .env.production
+          echo "VITE_MY_FINANCES_SECURE_KEY=${{ secrets.VITE_MY_FINANCES_SECURE_KEY }}" >> .env.production
+          echo "VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}" >> .env.production
+          echo "VITE_API_AUTH_BIN_RESOURCE=${{ secrets.VITE_API_AUTH_BIN_RESOURCE }}" >> .env.production
+          echo "VITE_API_SALARY_BIN_RESOURCE=${{ secrets.VITE_API_SALARY_BIN_RESOURCE }}" >> .env.production
+          echo "VITE_API_EXPENSES_BIN_RESOURCE=${{ secrets.VITE_API_EXPENSES_BIN_RESOURCE }}" >> .env.production
+          echo 'VITE_API_KEY=${{ secrets.VITE_API_KEY }}' >> .env.production
+          echo "VITE_LAST_UPDATE_BALANCE_KEY=${{ secrets.VITE_LAST_UPDATE_BALANCE_KEY }}" >> .env.production
+          echo "VITE_LAST_UPDATE_EXPENSES_KEY=${{ secrets.VITE_LAST_UPDATE_EXPENSES_KEY }}" >> .env.production
+    
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Build da aplicação
+        run: npm run build
+
+      - name: Deploy para o GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
