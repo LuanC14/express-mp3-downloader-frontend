@@ -34,14 +34,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v4
+
       - name: Build
+        run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
-        run: npm run build
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v4
+          VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
