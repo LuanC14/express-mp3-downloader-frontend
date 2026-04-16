@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   TextField,
@@ -18,76 +18,47 @@ const STATUS = {
   SUCCESS: "success",
   ERROR: "error",
 };
+
 const API = import.meta.env.VITE_API_URL;
+const HEALTH_URL = API.replace(/\/api$/, "") + "/health";
 
 export default function DownloadScreen({ mode, onBack }) {
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState(STATUS.IDLE);
-  const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
-  const esRef = useRef(null);
+  const [serverReady, setServerReady] = useState(false);
+
+  useEffect(() => {
+    axios.get(HEALTH_URL).finally(() => setServerReady(true));
+  }, []);
 
   const handleSubmit = async () => {
     const trimmed = url.trim();
     if (!trimmed) return;
 
     setStatus(STATUS.LOADING);
-    setProgress(0);
-    setProgressLabel("");
     setErrorMsg("");
 
     try {
       const endpoint = mode === "playlist" ? `${API}/playlist` : `${API}/video`;
-      const { data } = await axios.post(endpoint, { url: trimmed });
-      const { jobId } = data;
+      const response = await axios.post(endpoint, { url: trimmed }, { responseType: "blob" });
 
-      const es = new EventSource(`${API}/progress/${jobId}`);
-      esRef.current = es;
+      const blobUrl = URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = mode === "playlist" ? "playlist.zip" : "audio.mp3";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
 
-      es.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-
-        if (msg.type === "progress") {
-          setProgress(msg.percent ?? 0);
-          if (msg.label) setProgressLabel(msg.label);
-        } else if (msg.type === "done") {
-          es.close();
-          setProgress(100);
-
-          const a = document.createElement("a");
-          a.href = `${API}/file/${msg.jobId}`;
-          a.download = mode === "playlist" ? "playlist.zip" : "audio.mp3";
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-
-          setStatus(STATUS.SUCCESS);
-          setUrl("");
-        } else if (msg.type === "error") {
-          es.close();
-          setErrorMsg(msg.message);
-          setStatus(STATUS.ERROR);
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
-        setErrorMsg("Conexão perdida com o servidor.");
-        setStatus(STATUS.ERROR);
-      };
+      setStatus(STATUS.SUCCESS);
+      setUrl("");
     } catch (err) {
-      const message =
-        err.response?.data?.error || "Ocorreu um erro inesperado.";
+      const message = err.response?.data?.error || "Ocorreu um erro inesperado.";
       setErrorMsg(message);
       setStatus(STATUS.ERROR);
     }
-  };
-
-  const handleBack = () => {
-    esRef.current?.close();
-    esRef.current = null;
-    onBack();
   };
 
   const handleKeyDown = (e) => {
@@ -95,6 +66,7 @@ export default function DownloadScreen({ mode, onBack }) {
   };
 
   const isLoading = status === STATUS.LOADING;
+  const isDisabled = isLoading || !serverReady;
 
   const placeholder =
     mode === "playlist"
@@ -114,15 +86,19 @@ export default function DownloadScreen({ mode, onBack }) {
     >
       <Box sx={{ width: "100%", maxWidth: 560 }}>
         <Box sx={{ display: "flex", alignItems: "center", mb: 3, gap: 1 }}>
-          <IconButton onClick={handleBack} disabled={isLoading} size="small">
+          <IconButton onClick={onBack} disabled={isLoading} size="small">
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h6" sx={{ fontWeight: 500, color: "#111" }}>
-            {mode === "playlist"
-              ? "Download de Playlist"
-              : "Download Individual"}
+            {mode === "playlist" ? "Download de Playlist" : "Download Individual"}
           </Typography>
         </Box>
+
+        {!serverReady && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            Conectando ao servidor...
+          </Typography>
+        )}
 
         <TextField
           fullWidth
@@ -134,13 +110,13 @@ export default function DownloadScreen({ mode, onBack }) {
             if (status !== STATUS.LOADING) setStatus(STATUS.IDLE);
           }}
           onKeyDown={handleKeyDown}
-          disabled={isLoading}
+          disabled={isDisabled}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
                 <IconButton
                   onClick={handleSubmit}
-                  disabled={isLoading || !url.trim()}
+                  disabled={isDisabled || !url.trim()}
                   edge="end"
                   sx={{
                     color: "#fff",
@@ -149,10 +125,7 @@ export default function DownloadScreen({ mode, onBack }) {
                     p: "6px",
                     mr: "-2px",
                     "&:hover": { backgroundColor: "#1565c0" },
-                    "&.Mui-disabled": {
-                      backgroundColor: "#b0bec5",
-                      color: "#fff",
-                    },
+                    "&.Mui-disabled": { backgroundColor: "#b0bec5", color: "#fff" },
                   }}
                 >
                   <ArrowForwardIcon />
@@ -160,30 +133,11 @@ export default function DownloadScreen({ mode, onBack }) {
               </InputAdornment>
             ),
           }}
-          sx={{
-            "& .MuiOutlinedInput-root": { borderRadius: "8px", pr: "8px" },
-          }}
+          sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px", pr: "8px" } }}
         />
 
         {isLoading && (
-          <Box sx={{ mt: 2 }}>
-            <Box
-              sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}
-            >
-              <Typography variant="caption" color="text.secondary">
-                {progressLabel ||
-                  (progress === 0 ? "Iniciando..." : "Processando...")}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {progress > 0 ? `${progress}%` : ""}
-              </Typography>
-            </Box>
-            <LinearProgress
-              variant={progress > 0 ? "determinate" : "indeterminate"}
-              value={progress}
-              sx={{ borderRadius: 4, height: 6 }}
-            />
-          </Box>
+          <LinearProgress sx={{ mt: 2, borderRadius: 4, height: 6 }} />
         )}
 
         {status === STATUS.SUCCESS && (
